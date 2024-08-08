@@ -1,8 +1,14 @@
-import { StyleSheet, Text, View, Image } from 'react-native';
 import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, Image, FlatList, ListRenderItem, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWT from 'expo-jwt';
 import axios from 'axios';
+import { useSocket } from '../useWebSocket';
+
+interface WebSocketMessage {
+  userId: string; 
+  message: string;
+}
 
 interface User {
   id: string;
@@ -10,7 +16,7 @@ interface User {
   name: string;
   imagesProfile: string[];
   joinCampingPosts: JoinCampingPost[];
-  posts:Post[]
+  posts: Post[];
 }
 
 interface Post {
@@ -18,8 +24,8 @@ interface Post {
   title: string;
   description: string;
   location: string;
-  startDate: string; // ISO 8601 format
-  endDate: string; // ISO 8601 format
+  startDate: string;
+  endDate: string;
   equipment: string[];
   places: number;
   ageCategory: "ADULT" | "CHILD" | "TEEN";
@@ -31,7 +37,7 @@ interface Post {
 }
 
 interface JoinCampingPost {
-  userId: number;
+  userId: string; 
   postId: number;
   rating: number;
   reviews: string;
@@ -46,23 +52,21 @@ const Notifications = () => {
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [messages, setMessages] = useState<WebSocketMessage[]>([]);
+  
+  const { socket } = useSocket();
+
+  const renderItem: ListRenderItem<WebSocketMessage> = ({ item }) => (
+    <View style={styles.messageContainer}>
+      <Text style={styles.messageText}>User {item.userId}: {item.message}</Text>
+    </View>
+  );
 
   useEffect(() => {
     const fetchUserData = async (userId: string) => {
       try {
-        const response = await axios.get(
-          `http://192.168.10.20:5000/api/users/${userId}`
-        );
-        console.log("User data fetched:", response.data);
-        setUser({
-          id: response.data.user.id,
-          name: response.data.user.name,
-          email: response.data.user.email,
-          imagesProfile:response.data.user.imagesProfile,
-          joinCampingPosts:response.data.user.joinCampingPosts,
-          posts:response.data.posts
-         
-        });
+        const response = await axios.get(`http://192.168.10.20:5000/api/users/${userId}`);
+        setUser(response.data.user);
       } catch (error) {
         console.error("Error fetching user data:", error);
         setError("Failed to fetch user data");
@@ -77,33 +81,46 @@ const Notifications = () => {
         if (tokenData) {
           const token = tokenData.startsWith('Bearer ') ? tokenData.replace('Bearer ', '') : tokenData;
           const key = 'mySuperSecretPrivateKey';
-
+          
           try {
             const decodedToken = JWT.decode(token, key);
             if (decodedToken && decodedToken.id) {
               fetchUserData(decodedToken.id);
             } else {
-              console.error("Failed to decode token or token does not contain ID");
               setError("Failed to decode token or token does not contain ID");
             }
           } catch (decodeError) {
-            console.error("Error decoding token:", decodeError);
             setError("Failed to decode token");
           }
         } else {
-          console.error("Token not found in AsyncStorage");
           setError("Token not found");
         }
       } catch (storageError) {
-        console.error("Failed to fetch token from AsyncStorage:", storageError);
         setError("Failed to fetch token");
       }
     };
 
     decodeToken();
   }, []);
-  console.log('user',user?.joinCampingPosts)
 
+  useEffect(() => {
+    if (socket && user) {
+      const userId = user.id; 
+      socket.emit('register', userId);
+      socket.emit('joinRoom', userId);
+      console.log(userId)
+      socket.on('notification', (message: string) => {
+        console.log(message)
+        Alert.alert('New Notification', message);
+        setMessages(prevMessages => [...prevMessages, { userId: userId, message }]);
+      });
+
+      return () => {
+        socket.off('notification');
+      };
+    }
+  }, [socket, user]);
+  console.log('Messages',messages)
   if (loading) {
     return <Text style={styles.message}>Loading...</Text>;
   }
@@ -117,6 +134,13 @@ const Notifications = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Notifications</Text>
+      {messages.length > 0 && (
+        <FlatList
+          data={messages}
+          renderItem={renderItem}
+          keyExtractor={(item, index) => index.toString()}
+        />
+      )}
       {user?.joinCampingPosts?.map((notification, index) => (
         <View key={index} style={styles.notification}>
           <Image style={styles.profile} source={{ uri: profileImageUrl }} />
@@ -128,14 +152,14 @@ const Notifications = () => {
       ))}
     </View>
   );
-}
+};
 
 export default Notifications;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#00595E', // Background color consistent with other components
+    backgroundColor: '#00595E',
     padding: 20,
   },
   title: {
@@ -143,13 +167,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#F0F8FF',
     marginBottom: 20,
-    textAlign: 'center', // Center the title
+    textAlign: 'center',
+  },
+  messageContainer: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#014043',
+  },
+  messageText: {
+    color: '#F0F8FF',
+    fontSize: 16,
   },
   notification: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
-    backgroundColor: '#014043', // Card background color consistent with other components
+    backgroundColor: '#014043',
     borderRadius: 10,
     marginBottom: 15,
     shadowColor: '#000',
@@ -174,6 +207,13 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 16,
-    color: '#B0BEC5', // Text color consistent with other components
+    color: '#B0BEC5',
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
+
+
+
+
+

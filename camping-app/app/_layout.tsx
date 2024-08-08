@@ -1,9 +1,10 @@
 import React from 'react';
 import { Stack } from "expo-router";
-
+import { SocketProvider} from './useWebSocket';
 export default function RootLayout() {
 
   return (
+    <SocketProvider>
     <Stack>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{headerShown: false }} />
@@ -23,8 +24,7 @@ export default function RootLayout() {
       <Stack.Screen name="SearchedUserProfile/UserProfile" options={{title: "UserProfile", headerShown: false}} />
       <Stack.Screen name="createExp/CreateExp" options={{title: "create experience", headerShown: false}} />
       <Stack.Screen name="addTips/addTips" options={{title: "create experience", headerShown: false}} />
-
-
     </Stack>
+    </SocketProvider>
   );
 }

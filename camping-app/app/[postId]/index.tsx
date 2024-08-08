@@ -5,6 +5,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWT from 'expo-jwt';
 import axios from 'axios';
+import { useSocket } from '../useWebSocket';
 
 const { width } = Dimensions.get('window');
 
@@ -52,6 +53,7 @@ interface ApiResponse {
 }
 
 const PostDetailScreen: React.FC = () => {
+  const { socket } = useSocket(); // Access the socket instance from context
   const [user, setUser] = useState<User>({ id: "", name: "", email: "", role: "" });
   const [post, setPost] = useState<CampingEventData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -63,7 +65,8 @@ const PostDetailScreen: React.FC = () => {
   const [isCancelModalVisible, setIsCancelModalVisible] = useState<boolean>(false); // Cancellation Confirmation Modal
   const [isCancelSuccessModalVisible, setIsCancelSuccessModalVisible] = useState<boolean>(false); // Cancellation Success Modal
   const [actionType, setActionType] = useState<'join' | 'cancel'>('join'); // Track action type
-
+  const [notificationMessage, setNotificationMessage] = useState<string[]>([]);
+  const [isNotificationVisible, setIsNotificationVisible] = useState<boolean>(false);
 
 
 
@@ -172,6 +175,28 @@ const PostDetailScreen: React.FC = () => {
   }, [refresh]);
   console.log('user', user)
 
+  useEffect(() => {
+    if (socket && user) {
+      const userId = user.id;
+      socket.emit('register', userId);
+      socket.emit('joinRoom', userId);
+  
+      const handleNotification = (message: string) => {
+        console.log('Received notification:', message);
+        setNotificationMessage(prevMessages => [...prevMessages, message]);
+        setIsNotificationVisible(true);
+      };
+  
+      socket.on('notification', handleNotification);
+  
+      return () => {
+        socket.off('notification', handleNotification);
+      };
+    }
+  }, [socket, user]);
+  
+  
+  console.log('notifications', notificationMessage)
   if (loading) {
     return (
       <View style={styles.container}>
@@ -230,6 +255,11 @@ const PostDetailScreen: React.FC = () => {
         user: user,
       };
       await joinPost(joinPostData);
+
+      // Emit event to notify the server
+      if (socket) {
+        socket.emit('camperJoined', post.id, user.id);
+      }
     } else if (actionType === 'cancel') {
       const cancelPostData: JoinCampingPost = {
         userId: user.id,
@@ -244,6 +274,7 @@ const PostDetailScreen: React.FC = () => {
       await cancelPost(cancelPostData);
     }
   };
+
 
   const cancelAction = () => {
     setIsModalVisible(false);
@@ -347,6 +378,7 @@ const PostDetailScreen: React.FC = () => {
             </TouchableOpacity>
           )}
         </View>
+       
       </Animated.View>
 
       {/* Confirmation Modal */}
@@ -426,6 +458,11 @@ const PostDetailScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+      {isNotificationVisible && (
+          <View style={styles.notificationContainer}>
+            <Text style={styles.notificationText}>{notificationMessage}</Text>
+          </View>
+        )}
     </ScrollView>
   );
 };
@@ -621,6 +658,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
     fontSize: 18,
+  },
+  notificationContainer: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    backgroundColor: '#333',
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  notificationText: {
+    color: '#fff',
+    fontSize: 16,
   },
 });
 
