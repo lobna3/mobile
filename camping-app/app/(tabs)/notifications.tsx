@@ -61,7 +61,7 @@ const Notifications = () => {
   const renderItem: ListRenderItem<WebSocketMessage> = ({ item }) => (
     <View style={styles.messageContainer}>
       <Text style={styles.messageText}>
-         {user?.name || 'Unknown'}: {messages}
+         {user?.name || 'Unknown'}: {item}
       </Text>
     </View>
   );
