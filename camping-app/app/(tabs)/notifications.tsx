@@ -49,18 +49,23 @@ interface JoinCampingPost {
 }
 
 const Notifications = () => {
+  const { socket } = useSocket(); // Access the socket instance from context
+  console.log('Socket:', socket);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [messages, setMessages] = useState<WebSocketMessage[]>([]);
   
-  const { socket } = useSocket();
+
 
   const renderItem: ListRenderItem<WebSocketMessage> = ({ item }) => (
     <View style={styles.messageContainer}>
-      <Text style={styles.messageText}>User {item.userId}: {item.message}</Text>
+      <Text style={styles.messageText}>
+         {user?.name || 'Unknown'}: {messages}
+      </Text>
     </View>
   );
+  
 
   useEffect(() => {
     const fetchUserData = async (userId: string) => {
@@ -105,18 +110,20 @@ const Notifications = () => {
 
   useEffect(() => {
     if (socket && user) {
-      const userId = user.id; 
+      const userId = user.id;
       socket.emit('register', userId);
       socket.emit('joinRoom', userId);
-      console.log(userId)
-      socket.on('notification', (message: string) => {
-        console.log(message)
-        Alert.alert('New Notification', message);
-        setMessages(prevMessages => [...prevMessages, { userId: userId, message }]);
-      });
+
+      const handleNotification = (message: WebSocketMessage) => {
+        console.log('Received notification:', message);
+        setMessages(prevMessages => [...prevMessages, message]); // Ensure message.message contains the actual message
+       
+      };
+
+      socket.on('notification', handleNotification);
 
       return () => {
-        socket.off('notification');
+        socket.off('notification', handleNotification);
       };
     }
   }, [socket, user]);
@@ -140,13 +147,16 @@ const Notifications = () => {
           renderItem={renderItem}
           keyExtractor={(item, index) => index.toString()}
         />
+        
       )}
+    
       {user?.joinCampingPosts?.map((notification, index) => (
         <View key={index} style={styles.notification}>
           <Image style={styles.profile} source={{ uri: profileImageUrl }} />
           <View style={styles.info}>
             <Text style={styles.name}>{user.name}</Text>
             <Text style={styles.message}>{notification.notification}</Text>
+            
           </View>
         </View>
       ))}

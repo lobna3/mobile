@@ -17,8 +17,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   useEffect(() => {
     const newSocket = io('http://192.168.10.20:5000', {
       transports: ['websocket'],
-      reconnectionAttempts: 5,
-      timeout: 5000,
+     
     });
   
     setSocket(newSocket);
@@ -36,7 +35,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       console.log('Socket connection closed');
     };
   }, []);
-  
 
   return (
     <SocketContext.Provider value={{ socket }}>
