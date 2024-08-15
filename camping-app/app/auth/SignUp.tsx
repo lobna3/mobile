@@ -1,6 +1,8 @@
-// SignUpScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ImageBackground, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import {
+  StyleSheet, Text, View, ImageBackground, TextInput, TouchableOpacity,
+  KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator
+} from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -22,7 +24,7 @@ const SignUpScreen = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-
+  const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
 
   const validateEmail = (email: string): boolean => {
@@ -35,7 +37,7 @@ const SignUpScreen = () => {
     return pattern.test(password);
   };
 
-  const handleRegister = async () => {
+  const handleRegisterAndVerify = async () => {
     try {
       if (!name || !email || !password || !confirmPassword) {
         throw new Error('All fields are required');
@@ -59,65 +61,51 @@ const SignUpScreen = () => {
 
       // Register the user
       const response = await axios.post('http://192.168.10.20:5000/api/users/register', userData);
-      
-      // Debug: Log the registration response
+      console.log(response.data)
+      setUser(response.data)
       console.log('Registration Response:', response.data);
-      router.replace({
-        pathname: 'UserInterests/Interests',
-        params: { userId: response.data.user.id}
-      });
+
       if (!response.data || !response.data.user || !response.data.user.id) {
         throw new Error('Failed to get user ID from registration response');
       }
 
-      setUserId(response.data.user.id); // Store the user ID
-     
+      // Set user ID and trigger email verification
+      const registeredUserId = response.data.user.id;
+      setUserId(registeredUserId); // Store the user ID
 
-      // Trigger email verification
-      const verified = await axios.post('http://192.168.10.20:5000/api/email/request-verification', { email });
-      setVerificationToken(verified.data.verificationToken);
+      const verificationResponse= await axios.post('http://192.168.10.20:5000/api/email/request-verification', { email });
+       if (verificationResponse.data && verificationResponse.data.token) {
+        setVerificationToken(verificationResponse.data.token); // Save the verification token
+        console.log(verificationResponse.data.token)
+      } else {
+        throw new Error('Failed to get verification token');
+      }
 
       Alert.alert('Success', 'Registration successful. Verifying your email...');
+
+      // Wait for email verification
+      setIsVerifying(true);
+      await axios.get(`http://192.168.10.20:5000/api/email/verify-email?token=${verificationResponse.data.token}`);
+      
+      Alert.alert('Success', 'Email verified successfully');
+      router.replace({
+        pathname: 'UserInterests/Interests',
+        params: { userId: response.data.user.id }
+      });
+
     } catch (err: any) {
-      console.error('Registration failed:', err);
+      console.error('Registration or verification failed:', err);
       setError(err.message);
-      Alert.alert('Registration Error', err.message);
+      Alert.alert('Error', err.message);
+
+      if (err.message.includes('Invalid or expired token')) {
+        router.replace('auth/SignIn'); // Redirect to Sign In on verification failure
+      }
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const verifyEmail = async (token: string) => {
-    try {
-      setIsVerifying(true);
-      await axios.get(`http://192.168.10.20:5000/api/email/verify-email?token=${token}`);
-      Alert.alert('Success', 'Email verified successfully');
-
-      // Redirect to UserInterests/Interests after successful verification
-      console.log('user',userId)
-      if (userId) {
-        router.replace({
-          pathname: 'UserInterests/Interests',
-          params: { userId: userId }
-        });
-      } else {
-        console.error('User ID is missing');
-        Alert.alert('Error', 'User ID is missing');
-      }
-    } catch (error) {
-      console.error('Email verification failed:', error);
-      Alert.alert('Error', 'Invalid or expired token');
-      router.replace('auth/SignIn'); // Redirect to Sign In on failure
-    } finally {
       setIsVerifying(false);
     }
   };
-
-  useEffect(() => {
-    if (verificationToken) {
-      verifyEmail(verificationToken);
-    }
-  }, [verificationToken]);
 
   return (
     <ImageBackground
@@ -179,7 +167,7 @@ const SignUpScreen = () => {
 
             <TouchableOpacity
               style={styles.registerButton}
-              onPress={handleRegister}
+              onPress={handleRegisterAndVerify}
               disabled={isSubmitting || isVerifying}
             >
               <Text style={styles.registerButtonText}>
