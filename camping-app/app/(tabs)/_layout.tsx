@@ -6,9 +6,11 @@ import { Entypo } from '@expo/vector-icons';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { NotificationProvider } from '../NotificationContext'; 
 
 const TabLayout = () => {
   return (
+    <NotificationProvider>
    <Tabs screenOptions={{headerShown:false, tabBarActiveTintColor: Colors.primaryColor}}>
     <Tabs.Screen name="home" 
       options={{
@@ -47,6 +49,7 @@ const TabLayout = () => {
       }}
     />
    </Tabs>
+   </NotificationProvider>
   )
 }
 

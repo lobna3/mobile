@@ -1,26 +1,28 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, ImageBackground, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+// SignUpScreen.tsx
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, ImageBackground, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
-import interests from '../UserInterests/Interests'
 
 interface User {
-
   name: string;
   email: string;
   password: string;
   confirmPassword: string;
 }
 
-const RegisterScreen = () => {
-  const [user, setUser] = useState<User | null>(null);
+const SignUpScreen = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationToken, setVerificationToken] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
   const router = useRouter();
 
   const validateEmail = (email: string): boolean => {
@@ -55,24 +57,67 @@ const RegisterScreen = () => {
 
       const userData: User = { name, email, password, confirmPassword };
 
-
+      // Register the user
       const response = await axios.post('http://192.168.10.20:5000/api/users/register', userData);
-
-      Alert.alert('Success', response.data.message)
-      setUser(response.data.user)
-      console.log(response.data.user)
+      
+      // Debug: Log the registration response
+      console.log('Registration Response:', response.data);
       router.replace({
         pathname: 'UserInterests/Interests',
-        params: { userId: response.data.user.id } // Pass userId as a parameter
+        params: { userId: response.data.user.id}
       });
+      if (!response.data || !response.data.user || !response.data.user.id) {
+        throw new Error('Failed to get user ID from registration response');
+      }
+
+      setUserId(response.data.user.id); // Store the user ID
+     
+
+      // Trigger email verification
+      const verified = await axios.post('http://192.168.10.20:5000/api/email/request-verification', { email });
+      setVerificationToken(verified.data.verificationToken);
+
+      Alert.alert('Success', 'Registration successful. Verifying your email...');
     } catch (err: any) {
-      console.error('Registration failed:', err)
+      console.error('Registration failed:', err);
       setError(err.message);
-      Alert.alert('Registration Error', err.message)
+      Alert.alert('Registration Error', err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const verifyEmail = async (token: string) => {
+    try {
+      setIsVerifying(true);
+      await axios.get(`http://192.168.10.20:5000/api/email/verify-email?token=${token}`);
+      Alert.alert('Success', 'Email verified successfully');
+
+      // Redirect to UserInterests/Interests after successful verification
+      console.log('user',userId)
+      if (userId) {
+        router.replace({
+          pathname: 'UserInterests/Interests',
+          params: { userId: userId }
+        });
+      } else {
+        console.error('User ID is missing');
+        Alert.alert('Error', 'User ID is missing');
+      }
+    } catch (error) {
+      console.error('Email verification failed:', error);
+      Alert.alert('Error', 'Invalid or expired token');
+      router.replace('auth/SignIn'); // Redirect to Sign In on failure
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  useEffect(() => {
+    if (verificationToken) {
+      verifyEmail(verificationToken);
+    }
+  }, [verificationToken]);
 
   return (
     <ImageBackground
@@ -135,12 +180,14 @@ const RegisterScreen = () => {
             <TouchableOpacity
               style={styles.registerButton}
               onPress={handleRegister}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isVerifying}
             >
               <Text style={styles.registerButtonText}>
-                {isSubmitting ? 'Registering...' : 'Register'}
+                {isSubmitting ? 'Registering...' : isVerifying ? 'Verifying...' : 'Register'}
               </Text>
             </TouchableOpacity>
+
+            {isVerifying && <ActivityIndicator size="large" color="#0000ff" />}
 
             <Text style={styles.or}>OR</Text>
 
@@ -160,9 +207,6 @@ const RegisterScreen = () => {
     </ImageBackground>
   );
 };
-
-
-export default RegisterScreen;
 
 const styles = StyleSheet.create({
   background: {
@@ -258,3 +302,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 });
+
+export default SignUpScreen;
+
+
+

@@ -34,24 +34,14 @@ const LoginScreen = () => {
 
       const newData: User = { email, password };
 
-
-
-
-
-
-     
-
-
       const res = await fetch('http://192.168.10.20:5000/api/users/login', {
-
-
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newData)
       });
 
       const data = await res.json();
-console.log(data);
+      console.log(data);
 
       if (!res.ok) {
         throw new Error(data.error || 'Failed to login');
